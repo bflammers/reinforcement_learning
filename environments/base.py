@@ -26,7 +26,7 @@ class Environment(abc.ABC):
     def reset(self) -> None:
         raise NotImplementedError
 
-    def get_state(self, set_terminal=True) -> State:
+    def get_state(self, set_terminal=False) -> State:
         state = copy(self.state)
         state.terminal = set_terminal
         return state

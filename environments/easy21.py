@@ -3,7 +3,7 @@ from enum import Enum
 from os import stat
 from typing import Tuple, List
 
-
+import polars as pl
 import numpy as np
 
 from .base import Action, State, Policy, Environment, Agent
@@ -51,6 +51,7 @@ class EasyAction(Action):
 ## State
 
 
+@dataclass
 class EasyState(State):
     dealer_showing: int = field(
         default_factory=lambda: Card(color=CardColor.BLACK).value
@@ -99,7 +100,7 @@ class EpsilonGreedyPolicy(Policy):
 
             # Evaluate Q function for both state, action pairs
             sa_stick, sa_hit = generate_state_action_pairs(state, EasyAction)
-            Q_stick, Q_hit = agent.get_q(sa_stick), agent.get_q(sa_hit)
+            Q_stick, Q_hit = agent.get_Q(sa_stick), agent.get_Q(sa_hit)
 
             # Greedy policy: take the one with the highest q value
             if Q_stick > Q_hit:
@@ -141,12 +142,49 @@ class MCAgent(Agent):
     def get_state_count(self, state: State) -> int:
         return self.Ns(state.key)
 
-    def get_q(self, sa_pair: StateActionPair = None):
+    def get_Q(self, sa_pair: StateActionPair = None):
 
         if sa_pair:
             return self.Q(sa_pair.key)
 
-        return self.Q.r
+        df = pl.DataFrame({"key": list(self.Q.r.keys()), "q": list(self.Q.r.values())})
+
+        df_Q = (
+            df.with_columns(pl.col("key").str.split_exact("-", 3))
+            .unnest("key")
+            .rename(
+                {
+                    "field_0": "Dealer showing",
+                    "field_1": "Player sum",
+                    "field_2": "Terminal",
+                    "field_3": "Action",
+                }
+            )
+            .drop("Terminal")
+            .with_columns(
+                [
+                    pl.col("Dealer showing").cast(pl.Int32),
+                    pl.col("Player sum").cast(pl.Int32),
+                ]
+            )
+            .sort(["Dealer showing", "Player sum"])
+        )
+
+        return df_Q
+
+    def get_V(self):
+
+        df_Q = self.get_Q()
+
+        df_V = (
+            df_Q.select(["Dealer showing", "Player sum", "q"])
+            .groupby(by=["Dealer showing", "Player sum"])
+            .max()
+            .sort(["Dealer showing", "Player sum"])
+            .pivot(values="q", index="Dealer showing", columns="Player sum")
+        )
+
+        return df_V
 
     def step(self, state: EasyState) -> Action:
         action = self.policy.step(state, self)
@@ -176,7 +214,7 @@ class EasyEnvironment(Environment):
         self.state = None
 
         self.reset()
-        self.dealer = DealerAgent()
+        self.dealer_policy = DealerPolicy()
 
     def reset(self):
         self.state = EasyState()
@@ -198,16 +236,19 @@ class EasyEnvironment(Environment):
             if self._is_bust(self.state.player_sum):
 
                 # Player loses: reward -1
-                return self.get_state(), -1
+                return self.get_state(set_terminal=True), -1
 
             else:
 
                 # Game continues: reward 0 (intermediate step)
-                return self.get_state(set_terminal=False), 0
+                return self.get_state(), 0
 
         else:  # Player sticks, dealer (environment) policy runs
 
-            while self.dealer.step(self.get_state(), self.dealer_sum) is EasyAction.HIT:
+            while (
+                self.dealer_policy.step(self.get_state(), self.dealer_sum)
+                is EasyAction.HIT
+            ):
 
                 card = Card()
                 self.dealer_sum += card.value
@@ -215,9 +256,9 @@ class EasyEnvironment(Environment):
                 if self._is_bust(self.dealer_sum):
 
                     # Player wins: reward +1
-                    return self.get_state(), 1
+                    return self.get_state(set_terminal=True), 1
 
             # Dealer won't draw more cards - determine reward
             r = np.sign(self.state.player_sum - self.dealer_sum)
 
-            return self.get_state(), r
+            return self.get_state(set_terminal=True), r
