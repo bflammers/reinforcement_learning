@@ -1,8 +1,9 @@
 import abc
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Tuple
+from typing import Tuple, List
 from copy import copy
+from collections import namedtuple
 
 
 class Action(Enum):
@@ -16,6 +17,10 @@ class State:
     @property
     def key(self) -> str:
         raise NotImplementedError
+
+
+# From https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html#replay-memory
+Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
 
 
 ## Environment
@@ -51,5 +56,5 @@ class Agent(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def step(self, state: State) -> Action:
+    def step(self, transitions: List[Transition]) -> Action:
         pass

@@ -1,3 +1,4 @@
+from curses import intrflush
 from dataclasses import dataclass, field
 from enum import Enum
 from os import stat
@@ -6,12 +7,12 @@ from typing import Tuple, List
 import polars as pl
 import numpy as np
 
-from .base import Action, State, Policy, Environment, Agent
+from .base import Action, State, Policy, Environment, Agent, Transition
 from .utils import (
     CountRegistry,
     ValueRegistry,
     StateActionPair,
-    generate_state_action_pairs,
+    generate_state_action_pairs
 )
 
 
@@ -122,7 +123,7 @@ class DealerAgent(Agent):
     def step(self, state: EasyState) -> EasyAction:
         return self.policy.step(state, state.player_sum)
 
-    def optimize(self, reward: float) -> None:
+    def optimize(self, transitions: List[Transition]) -> None:
         pass
 
 
@@ -133,11 +134,6 @@ class MCAgent(Agent):
         self.Ns = CountRegistry()
         self.Nsa = CountRegistry()
         self.Q = ValueRegistry()
-
-        self.episode: List[StateActionPair] = []
-
-    def reset_episode(self):
-        self.episode = []
 
     def get_state_count(self, state: State) -> int:
         return self.Ns(state.key)
@@ -172,6 +168,9 @@ class MCAgent(Agent):
 
         return df_Q
 
+    def get_return(self, idx: int, transitions: List[Transition]) -> float:
+        return transitions[-1].reward
+
     def get_V(self):
 
         df_Q = self.get_Q()
@@ -188,12 +187,15 @@ class MCAgent(Agent):
 
     def step(self, state: EasyState) -> Action:
         action = self.policy.step(state, self)
-        self.episode.append(StateActionPair(state, action))
         return action
 
-    def optimize(self, G: float) -> None:
+    def optimize(self, transitions: List[Transition]) -> None:
 
-        for sa_pair in self.episode:
+        for idx, transition in enumerate(transitions):
+
+            # Get return and state-action pair for current transition
+            G = self.get_return(idx, transitions)
+            sa_pair = StateActionPair(state=transition.state, action=transition.action)
 
             # Update counters
             self.Ns.increment(sa_pair.state.key)
