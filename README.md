@@ -1,7 +1,7 @@
 
 ## A personal project to learn reinforcement learning
 
-The repo is a working repo that contains:
+Working repo containing:
   
   * Summary of David Silver's lectures (in `summary/`) - https://www.davidsilver.uk/teaching/
   * Solutions to the Easy21 assignment in the course (in `notebooks/`)
