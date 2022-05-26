@@ -20,14 +20,13 @@ class State:
 
 
 # From https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html#replay-memory
-Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
+Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
 
 ## Environment
 
 
 class Environment(abc.ABC):
-
     def reset(self) -> None:
         raise NotImplementedError
 
@@ -51,10 +50,12 @@ class Policy(abc.ABC):
 
 
 class Agent(abc.ABC):
-
     def optimize(self):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def step(self, transitions: List[Transition]) -> Action:
+    def step(self, state: State) -> Action:
+        pass
+
+    def optimize(self, transitions: List[Transition]) -> None:
         pass
