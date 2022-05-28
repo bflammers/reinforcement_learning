@@ -26,7 +26,8 @@ if __name__ == "__main__":
             next_s, R = env.step(a)
 
             # Optimize Q
-            a = agent.optimize([Transition(s, a, next_s, R)])
+            next_a = agent.optimize([Transition(s, a, next_s, R)])
 
             # Set state, action to next state, next action
             s = copy(next_s)
+            a = copy(next_a)

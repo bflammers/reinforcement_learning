@@ -58,7 +58,11 @@ class EasyState(State):
         default_factory=lambda: Card(color=CardColor.BLACK).value
     )
     player_sum: int = field(default_factory=lambda: Card(color=CardColor.BLACK).value)
+    dealer_sum: int = None
     terminal: bool = False
+
+    def __post_init__(self):
+        self.dealer_sum = self.dealer_showing
 
     @property
     def key(self):
@@ -74,9 +78,9 @@ class Mode(Enum):
 
 
 class DealerPolicy(Policy):
-    def step(self, state: State, current_sum: int) -> EasyAction:
+    def step(self, state: EasyState) -> EasyAction:
 
-        if current_sum < 17:
+        if state.dealer_sum < 17:
             return EasyAction.HIT
 
         return EasyAction.STICK
@@ -119,7 +123,7 @@ class EpsilonGreedyPolicy(Policy):
 ## Agent
 
 
-class Easy21Agent(Agent):
+class EasyAgent(Agent):
     def get_Q(self, sa_pair: StateActionPair = None):
 
         if sa_pair:
@@ -165,7 +169,7 @@ class Easy21Agent(Agent):
         return df_V
 
 
-class DealerAgent(Easy21Agent):
+class DealerAgent(EasyAgent):
     def __init__(self) -> None:
         self.policy = DealerPolicy()
 
@@ -182,7 +186,7 @@ class DealerAgent(Easy21Agent):
         raise NotImplementedError
 
 
-class MCAgent(Easy21Agent):
+class MCAgent(EasyAgent):
     def __init__(self, policy: Policy) -> None:
         self.policy = policy
 
@@ -219,7 +223,7 @@ class MCAgent(Easy21Agent):
             self.Q.store(sa_pair.key, q_new)
 
 
-class TDAgent(Easy21Agent):
+class TDAgent(EasyAgent):
     def __init__(self, policy: Policy, lmbda: float, gamma: float = 1) -> None:
         self.policy = policy
         self.lmbda = lmbda  # Lambda
@@ -260,7 +264,7 @@ class TDAgent(Easy21Agent):
         sa_next = StateActionPair(t.next_state, next_action)
 
         # Calculate delta for updating Q(S, A)
-        delta = t.reward + self.gamma * self.Q(sa_next) - self.Q(sa_current)
+        delta = t.reward + self.gamma * self.Q(sa_next.key) - self.Q(sa_current.key)
 
         # Increment eligibility trace
         self.E.increment(sa_current.key)
@@ -288,7 +292,6 @@ class TDAgent(Easy21Agent):
 
 class EasyEnvironment(Environment):
     def __init__(self):
-        self.dealer_sum = None
         self.state = None
 
         self.reset()
@@ -296,7 +299,6 @@ class EasyEnvironment(Environment):
 
     def reset(self):
         self.state = EasyState()
-        self.dealer_sum = self.state.dealer_showing
 
     @staticmethod
     def _is_bust(value: int) -> bool:
@@ -323,20 +325,17 @@ class EasyEnvironment(Environment):
 
         else:  # Player sticks, dealer (environment) policy runs
 
-            while (
-                self.dealer_policy.step(self.get_state(), self.dealer_sum)
-                is EasyAction.HIT
-            ):
+            while self.dealer_policy.step(self.get_state()) is EasyAction.HIT:
 
                 card = Card()
-                self.dealer_sum += card.value
+                self.state.dealer_sum += card.value
 
-                if self._is_bust(self.dealer_sum):
+                if self._is_bust(self.state.dealer_sum):
 
                     # Player wins: reward +1
                     return self.get_state(set_terminal=True), 1
 
             # Dealer won't draw more cards - determine reward
-            r = np.sign(self.state.player_sum - self.dealer_sum)
+            r = np.sign(self.state.player_sum - self.state.dealer_sum)
 
             return self.get_state(set_terminal=True), r

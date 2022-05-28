@@ -1,3 +1,4 @@
+from numpy import isin
 from .base import State, Action
 
 
@@ -20,6 +21,7 @@ class Registry:
         self.r = dict()
 
     def __call__(self, key):
+        assert isinstance(key, str), 'Argument key should be of type str'
         return self.r.get(key, 0)
 
 
